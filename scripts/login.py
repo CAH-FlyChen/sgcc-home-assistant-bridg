@@ -27,6 +27,12 @@ class SgccLogin:
     @staticmethod
     def is_logged_in_page(driver) -> bool:
         try:
+            try:
+                if driver.execute_script("return !!sessionStorage.getItem('accessToken')"):
+                    return True
+            except Exception:
+                pass
+
             current_url = driver.current_url or ""
             if "/osgweb/login" not in current_url and "/osgweb/" in current_url:
                 return True
@@ -40,6 +46,31 @@ class SgccLogin:
             """))
         except Exception:
             return False
+
+    @staticmethod
+    def auth_evidence(driver) -> tuple[bool, str]:
+        try:
+            try:
+                if driver.execute_script("return !!sessionStorage.getItem('accessToken')"):
+                    return True, "token"
+            except Exception:
+                pass
+
+            current_url = driver.current_url or ""
+            if "/osgweb/login" not in current_url and "/osgweb/" in current_url:
+                return True, "url_dom"
+            if driver.execute_script("""
+                return !!(
+                    document.querySelector('.el-dropdown') ||
+                    document.querySelector('.userName') ||
+                    document.body.innerText.includes('我的') ||
+                    document.body.innerText.includes('安全退出')
+                );
+            """):
+                return True, "url_dom"
+            return False, "none"
+        except Exception:
+            return False, "error"
 
     @ErrorWatcher.watch
     def login(self, phone_code=False) -> bool:

@@ -9,11 +9,13 @@ def check_session(driver, check_method: str) -> SessionCheck:
     except Exception:
         current_url = ""
     redirected_to_login = "/osgweb/login" in current_url
+    auth_by = "none"
     try:
         from login import SgccLogin
-        authenticated = SgccLogin.is_logged_in_page(driver)
+        authenticated, auth_by = SgccLogin.auth_evidence(driver)
     except Exception:
         authenticated = False
+        auth_by = "error"
     if authenticated:
         status = "authenticated"
     elif redirected_to_login:
@@ -27,5 +29,5 @@ def check_session(driver, check_method: str) -> SessionCheck:
         current_url=safe_url,
         check_method=check_method,
         redirected_to_login=redirected_to_login,
-        evidence_redacted=f"url={safe_url}",
+        evidence_redacted=f"url={safe_url};auth_by={auth_by}",
     )

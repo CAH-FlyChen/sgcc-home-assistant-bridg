@@ -12,8 +12,12 @@ class SensorUpdator:
     def __init__(self):
         HASS_URL = os.getenv("HASS_URL")
         HASS_TOKEN = os.getenv("HASS_TOKEN")
+        if not HASS_URL:
+            raise ValueError("HASS_URL 未配置")
+        if not HASS_TOKEN:
+            logging.warning("HASS_TOKEN 未配置，Home Assistant REST API 调用可能失败。")
         self.base_url = HASS_URL[:-1] if HASS_URL.endswith("/") else HASS_URL
-        self.token = HASS_TOKEN
+        self.token = HASS_TOKEN or ""
         self._init_balance_notify()
 
     def _init_balance_notify(self):
@@ -364,12 +368,12 @@ class SensorUpdator:
 
     def send_url(self, sensorName, request_body):
         headers = {
-            "Content-Type": "application-json",
+            "Content-Type": "application/json",
             "Authorization": "Bearer " + self.token,
         }
         url = self.base_url + API_PATH + sensorName  # /api/states/<entity_id>
         try:
-            response = requests.post(url, verify=False, json=request_body, headers=headers)
+            response = requests.post(url, verify=False, json=request_body, headers=headers, timeout=10)
             logging.debug(
                 f"Home Assistant REST API 调用，POST {url}。响应[{response.status_code}]: {response.content}"
             )

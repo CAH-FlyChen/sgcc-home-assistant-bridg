@@ -69,12 +69,12 @@ def main():
     next_run_time = parsed_time + timedelta(hours=12)
 
     logging.info(f'立即执行任务！下次运行时间为每天 {parsed_time.strftime("%H:%M")} 和 {next_run_time.strftime("%H:%M")}')
-    schedule.every().day.at(parsed_time.strftime("%H:%M")).do(run_task, fetcher, "schedule")
-    schedule.every().day.at(next_run_time.strftime("%H:%M")).do(run_task, fetcher, "schedule")
+    schedule.every().day.at(parsed_time.strftime("%H:%M")).do(safe_scheduled_job, run_task, fetcher, "schedule")
+    schedule.every().day.at(next_run_time.strftime("%H:%M")).do(safe_scheduled_job, run_task, fetcher, "schedule")
 
     # 每5分钟重发一次数据，防止HA重启后数据丢失
     # 如果缓存数据日期与当前日期不一致，则从国家电网重新获取数据
-    schedule.every(5).minutes.do(republish_or_fetch, updator, fetcher)
+    schedule.every(5).minutes.do(safe_scheduled_job, republish_or_fetch, updator, fetcher)
 
     # 启动时先尝试从缓存恢复
     # 如果缓存恢复成功，则跳过本次启动时的实时抓取，避免频繁重启导致账号被封
@@ -87,6 +87,14 @@ def main():
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+
+def safe_scheduled_job(job_func, *args, **kwargs):
+    try:
+        return job_func(*args, **kwargs)
+    except Exception as e:
+        logging.error(f"定时任务 {getattr(job_func, '__name__', repr(job_func))} 执行失败，已跳过本次并继续调度: {e}")
+        return None
 
 
 def republish_or_fetch(updator: SensorUpdator, fetcher: DataFetcher):
