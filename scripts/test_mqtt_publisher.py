@@ -139,6 +139,7 @@ class MqttPublisherTestCase(unittest.TestCase):
         self.assertEqual(balance_payload["device"]["name"], "国网电费 *********0123")
         self.assertEqual(balance_payload["device"]["manufacturer"], "SGCC bridge")
         self.assertTrue(next(retain for topic, _, retain in client.published if topic == balance_topic))
+        self.assertTrue(next(retain for topic, _, retain in client.published if topic == "sgcc/sgcc_xxxxxxxxx0123/balance/state"))
         self.assertEqual(state_messages["sgcc/sgcc_xxxxxxxxx0123/balance/state"], "88.12")
 
         month_valley_config = config_messages[

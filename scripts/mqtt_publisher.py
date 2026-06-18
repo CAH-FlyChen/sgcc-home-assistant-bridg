@@ -102,7 +102,7 @@ class MqttPublisher:
                 }
                 payload.update({k: v for k, v in spec.items() if v is not None})
                 self._publish(config_topic, json.dumps(payload, ensure_ascii=False), retain=True)
-                self._publish(state_topic, self._format_value(value), retain=False)
+                self._publish(state_topic, self._format_value(value), retain=True)
                 published += 1
             return published > 0
         except Exception as e:
