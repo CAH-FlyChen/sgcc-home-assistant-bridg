@@ -75,14 +75,6 @@ class SgccLogin:
     @ErrorWatcher.watch
     def login(self, phone_code=False) -> bool:
         driver = self.driver
-        if os.getenv("SGCC_REAL_BROWSER", "false").lower() in ("1", "true", "yes", "on"):
-            try:
-                driver.execute_script("return document.readyState")
-                if self.is_logged_in_page(driver):
-                    logging.info(f"检测到持久浏览器已有登录态: {driver.current_url}")
-                    return True
-            except Exception as e:
-                logging.warning(f"检查持久浏览器登录态失败，将打开登录页: {e}")
         try:
             self._safe_get(driver, LOGIN_URL, "登录页面")
             if self.is_logged_in_page(driver):

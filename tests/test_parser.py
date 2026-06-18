@@ -1,0 +1,91 @@
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+
+from parser import merge_account_data, parse_account_data
+
+
+class ParserTestCase(unittest.TestCase):
+    def test_parse_vuex_snapshot_extracts_account_balance_usage(self):
+        store = {
+            "state": {
+                "account": {
+                    "consNo": "1234567890123",
+                    "consName_dst": "家庭用电",
+                    "elecAddr_dst": "上海市某小区",
+                    "proCode": "31",
+                },
+                "balance": {
+                    "consNo": "1234567890123",
+                    "amtTime": "2026-06-18T08:00:00+08:00",
+                    "accountBalance": "88.12元",
+                    "prepayBal": "12.34",
+                    "historyOwe": "0.00",
+                },
+                "powerData": {
+                    "dataInfo": {
+                        "year": "2026",
+                        "totalEleNum": "321.0",
+                        "totalEleCost": "123.45",
+                    },
+                    "mothEleList": [
+                        {
+                            "month": "202606",
+                            "monthEleNum": "56.7",
+                            "monthEleCost": "23.45",
+                            "begDate": "2026-06-01 00:00:00",
+                            "endDate": "2026-06-30 23:59:59",
+                        }
+                    ],
+                },
+            }
+        }
+        components = [
+            {
+                "data": {
+                    "sevenEleList": [
+                        {
+                            "day": "2026-06-17",
+                            "dayElePq": "6.5",
+                            "thisVPq": "1.0",
+                            "thisNPq": "2.0",
+                            "thisPPq": "3.0",
+                            "thisTPq": "0.5",
+                        }
+                    ]
+                }
+            }
+        ]
+
+        data = parse_account_data(store=store, components=components)
+
+        self.assertEqual(data.account.account_no, "1234567890123")
+        self.assertEqual(data.account.display_name, "家庭用电")
+        self.assertEqual(data.balance.balance_cny, 88.12)
+        self.assertEqual(data.balance.prepay_balance_cny, 12.34)
+        self.assertEqual(data.yearly.total_usage_kwh, 321.0)
+        self.assertEqual(data.monthly[0].year_month, "2026-06")
+        self.assertEqual(data.monthly[0].begin_date, "2026-06-01")
+        self.assertEqual(data.daily[0].date, "2026-06-17")
+        self.assertEqual(data.daily[0].peak_usage_kwh, 3.0)
+
+    def test_merge_account_data_fills_masked_account_numbers(self):
+        first = parse_account_data(store={"masked": "*********0123"})
+        second = parse_account_data(
+            store={
+                "account": {"consNo": "1234567890123", "elecAddr_dst": "addr"},
+                "balance": {"accountBalance": "10.5"},
+            }
+        )
+
+        merged = merge_account_data(first, second)
+
+        self.assertEqual(merged.account.account_no, "1234567890123")
+        self.assertEqual(merged.balance.account_no, "1234567890123")
+        self.assertEqual(merged.balance.balance_cny, 10.5)
+
+
+if __name__ == "__main__":
+    unittest.main()
