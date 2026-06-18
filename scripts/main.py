@@ -12,7 +12,7 @@ from datetime import datetime,timedelta
 from const import *
 from config import FetcherConfig
 from data_fetcher import DataFetcher
-from model import AccountData
+from model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading
 from mqtt_publisher import MqttPublisher
 from redact import redact_text
 from store import Store
@@ -137,6 +137,8 @@ def republish_cached(updator: SensorUpdator | None, config: FetcherConfig) -> bo
     if publisher in {"mqtt", "both"}:
         attempted = True
         mqtt_ok = republish_mqtt_from_store(config)
+        if not mqtt_ok:
+            mqtt_ok = republish_mqtt_from_legacy_ha_state(updator, config)
 
     return attempted and rest_ok and mqtt_ok
 
@@ -176,6 +178,154 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
     except Exception as e:
         logging.warning(f"MQTT 缓存重发布失败，已忽略: {redact_text(e)}")
         return False
+
+
+def republish_mqtt_from_legacy_ha_state(updator: SensorUpdator | None, config: FetcherConfig) -> bool:
+    """Fallback MQTT discovery from existing HA REST sensor states.
+
+    Older deployments have useful same-day ``sgcc_cache.json`` + HA REST
+    states, but no normalized SQLite Store yet. Publishing MQTT discovery from
+    those states lets HA create MQTT entities immediately after the P8 rollout,
+    without forcing another SGCC browser login.
+    """
+    if updator is None:
+        logging.info("REST 状态读取器未初始化，跳过 MQTT 旧 HA 状态兜底重发布。")
+        return False
+
+    postfixes = _legacy_cache_postfixes(updator)
+    if not postfixes:
+        logging.info("未找到当天旧 REST 缓存户号，跳过 MQTT 旧 HA 状态兜底重发布。")
+        return False
+
+    try:
+        with MqttPublisher(config) as publisher:
+            if not publisher.connected:
+                return False
+            published_count = 0
+            for postfix in postfixes:
+                account_data = _account_data_from_ha_states(updator, postfix)
+                if account_data is None:
+                    continue
+                if publisher.publish_account_data(account_data):
+                    published_count += 1
+            if published_count:
+                logging.info(f"MQTT 已从旧 HA REST 状态兜底重发布 {published_count} 个户号。")
+            return published_count > 0
+    except Exception as e:
+        logging.warning(f"MQTT 旧 HA 状态兜底重发布失败，已忽略: {redact_text(e)}")
+        return False
+
+
+def _legacy_cache_postfixes(updator: SensorUpdator) -> list[str]:
+    cache_file = updator._get_cache_file()
+    if not os.path.exists(cache_file):
+        return []
+    try:
+        with open(cache_file, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.warning(f"加载旧 REST 缓存失败，跳过 MQTT 兜底: {redact_text(e)}")
+        return []
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    postfixes: list[str] = []
+    for user_id, values in data.items():
+        if not isinstance(values, dict):
+            continue
+        cache_timestamp = values.get("timestamp", "")
+        cache_date = cache_timestamp[:10] if cache_timestamp else ""
+        if cache_date != today_str:
+            continue
+        suffix = str(user_id)[-4:]
+        if len(suffix) == 4 and suffix not in postfixes:
+            postfixes.append(suffix)
+    return postfixes
+
+
+def _account_data_from_ha_states(updator: SensorUpdator, postfix: str) -> AccountData | None:
+    suffix = f"_{postfix}"
+    states = {
+        "balance": _state_float(updator.get_sensor_state(BALANCE_SENSOR_NAME + suffix)),
+        "prepay_balance": _state_float(updator.get_sensor_state(PREPAY_BALANCE_SENSOR_NAME + suffix)),
+        "last_daily_usage": _state_float(updator.get_sensor_state(DAILY_USAGE_SENSOR_NAME + suffix)),
+        "month_usage": _state_float(updator.get_sensor_state(MONTH_USAGE_SENSOR_NAME + suffix)),
+        "month_charge": _state_float(updator.get_sensor_state(MONTH_CHARGE_SENSOR_NAME + suffix)),
+        "month_valley": _state_float(updator.get_sensor_state(MONTH_VALLEY_SENSOR_NAME + suffix)),
+        "month_flat": _state_float(updator.get_sensor_state(MONTH_FLAT_SENSOR_NAME + suffix)),
+        "month_peak": _state_float(updator.get_sensor_state(MONTH_PEAK_SENSOR_NAME + suffix)),
+        "month_tip": _state_float(updator.get_sensor_state(MONTH_TIP_SENSOR_NAME + suffix)),
+        "year_usage": _state_float(updator.get_sensor_state(YEARLY_USAGE_SENSOR_NAME + suffix)),
+        "year_charge": _state_float(updator.get_sensor_state(YEARLY_CHARGE_SENSOR_NAME + suffix)),
+    }
+    if all(value is None for value in states.values()):
+        return None
+
+    now = datetime.now()
+    account_no = f"000000000{postfix}"
+    balance = None
+    if states["balance"] is not None or states["prepay_balance"] is not None:
+        balance = Balance(
+            account_no=account_no,
+            observed_at=now.isoformat(),
+            balance_cny=states["balance"],
+            prepay_balance_cny=states["prepay_balance"],
+        )
+
+    daily = []
+    if (
+        states["last_daily_usage"] is not None
+        or states["month_valley"] is not None
+        or states["month_flat"] is not None
+        or states["month_peak"] is not None
+        or states["month_tip"] is not None
+    ):
+        daily.append(DailyReading(
+            account_no=account_no,
+            date=now.strftime("%Y-%m-%d"),
+            total_usage_kwh=states["last_daily_usage"],
+            valley_usage_kwh=states["month_valley"],
+            flat_usage_kwh=states["month_flat"],
+            peak_usage_kwh=states["month_peak"],
+            tip_usage_kwh=states["month_tip"],
+        ))
+
+    monthly = []
+    if states["month_usage"] is not None or states["month_charge"] is not None:
+        monthly.append(MonthlyReading(
+            account_no=account_no,
+            year_month=now.strftime("%Y-%m"),
+            total_usage_kwh=states["month_usage"],
+            total_charge_cny=states["month_charge"],
+        ))
+
+    yearly = None
+    if states["year_usage"] is not None or states["year_charge"] is not None:
+        yearly = YearlyReading(
+            account_no=account_no,
+            year=now.strftime("%Y"),
+            total_usage_kwh=states["year_usage"],
+            total_charge_cny=states["year_charge"],
+        )
+
+    return AccountData(
+        account=Account(account_no=account_no),
+        balance=balance,
+        yearly=yearly,
+        monthly=monthly,
+        daily=daily,
+    )
+
+
+def _state_float(state_obj) -> float | None:
+    if not state_obj:
+        return None
+    value = state_obj.get("state")
+    if value in (None, "", "unknown", "unavailable"):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def run_task(data_fetcher: DataFetcher, trigger_type: str = "manual"):
