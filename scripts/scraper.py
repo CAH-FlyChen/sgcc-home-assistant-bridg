@@ -5,6 +5,7 @@ and assumes the browser is already authenticated.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -78,7 +79,15 @@ class Scraper:
 
     def _parse_current_page(self) -> AccountData:
         snapshot = self._snapshot()
-        return parse_account_data(store=snapshot.get("store"), components=snapshot.get("components"))
+        data = parse_account_data(store=snapshot.get("store"), components=snapshot.get("components"))
+        logging.info(
+            "Path B 当前页解析摘要: "
+            f"account={'yes' if data.account.account_no else 'no'}, "
+            f"balance={'yes' if data.balance else 'no'}, "
+            f"monthly={len(data.monthly)}, daily={len(data.daily)}, "
+            f"yearly={'yes' if data.yearly else 'no'}"
+        )
+        return data
 
     def _snapshot(self) -> dict[str, Any]:
         store = {}
@@ -96,21 +105,24 @@ class Scraper:
         return {"store": store, "components": components, "url": self.driver.current_url}
 
     def _navigate(self, url: str, label: str) -> None:
-        previous_signature = self._business_signature(label)
-        self.driver.execute_script("window.location.href = arguments[0];", url)
         target_path = url.split("/osgweb", 1)[-1]
+        current_url = self.driver.current_url or ""
+        previous_signature = self._business_signature(label) if target_path in current_url else None
+        logging.info(f"Path B 导航到 {label}: {url}")
+        self.driver.execute_script("window.location.href = arguments[0];", url)
         try:
             WebDriverWait(self.driver, self.wait_seconds).until(
                 lambda d: target_path in (d.current_url or "")
                 or d.execute_script("return document.readyState") in ("interactive", "complete")
             )
         except TimeoutException:
-            pass
+            logging.warning(f"Path B 等待 {label} URL/readyState 超时，继续尝试读取页面状态。")
         self._wait_for_business_ready(label, previous_signature)
         try:
             self.driver.execute_script("window.stop();")
         except Exception:
             pass
+        logging.info(f"Path B {label} 页面当前 URL: {self.driver.current_url}")
 
     def _click_tab(self, tab_text: str) -> bool:
         xpaths = [

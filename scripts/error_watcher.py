@@ -5,6 +5,7 @@
 import os
 import logging
 import functools
+import json
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -95,10 +96,47 @@ class ErrorWatcher:
             self.__handle_error(e, **options)
             raise e
 
+    def capture(self, label: str, error: Exception | str | None = None) -> str | None:
+        """Save screenshot/html/meta for non-exception failure branches."""
+        driver = self.driver
+        if not driver:
+            logging.error("未设置截图驱动。")
+            return None
+
+        safe_label = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in label)[:80] or "capture"
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        capture_dir = os.path.join(self.root_dir, f'{safe_label}_{timestamp}')
+        try:
+            os.makedirs(capture_dir, exist_ok=True)
+            screenshot_path = os.path.join(capture_dir, 'screenshot.png')
+            html_path = os.path.join(capture_dir, 'page.html')
+            meta_path = os.path.join(capture_dir, 'meta.json')
+
+            driver.save_screenshot(screenshot_path)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(driver.page_source or '')
+
+            try:
+                browser_logs = driver.get_log('browser')[-50:]
+            except Exception as log_error:
+                browser_logs = [{'error': type(log_error).__name__ + ': ' + str(log_error)}]
+
+            meta = {
+                'label': label,
+                'error': str(error) if error is not None else '',
+                'current_url': getattr(driver, 'current_url', ''),
+                'title': getattr(driver, 'title', ''),
+                'browser_logs': browser_logs,
+            }
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+            logging.error(f"已保存浏览器现场至 {capture_dir}")
+            return capture_dir
+        except Exception as e:
+            logging.error(f"保存浏览器现场失败: {e}")
+            return None
+
     def __handle_error(self, error, **options):
-        """
-        error 参数当前未使用，保留以备将来使用。
-        """
         driver = options.get('driver', self.driver)
         if not driver:
             logging.error("未设置截图驱动。")

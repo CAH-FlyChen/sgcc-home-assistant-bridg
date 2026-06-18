@@ -80,8 +80,16 @@ class SgccLogin:
             if self.is_logged_in_page(driver):
                 logging.info(f"打开登录页后检测到已登录态: {driver.current_url}")
                 return True
-            WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME * 3).until(EC.visibility_of_element_located((By.CLASS_NAME, "user")))
-        except Exception:
+            try:
+                WebDriverWait(driver, self.config.DRIVER_IMPLICITY_WAIT_TIME * 3).until(
+                    EC.visibility_of_element_located((By.CLASS_NAME, "user"))
+                )
+            except Exception as wait_error:
+                ErrorWatcher.instance().capture("login_page_load_failed", wait_error)
+                logging.error(f"登录页面加载失败: {LOGIN_URL}")
+                return False
+        except Exception as e:
+            ErrorWatcher.instance().capture("login_page_open_failed", e)
             logging.error(f"登录页面加载失败: {LOGIN_URL}")
             return False
         logging.info(f"打开登录页面: {LOGIN_URL}。\r")

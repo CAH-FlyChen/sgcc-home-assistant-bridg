@@ -11,6 +11,7 @@ from sensor_updator import SensorUpdator
 from datetime import datetime,timedelta
 from const import *
 from config import FetcherConfig
+from cache_validity import has_useful_legacy_cache_entry
 from data_fetcher import DataFetcher
 from model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading
 from mqtt_publisher import MqttPublisher
@@ -235,6 +236,9 @@ def _legacy_cache_postfixes(updator: SensorUpdator) -> list[str]:
         cache_timestamp = values.get("timestamp", "")
         cache_date = cache_timestamp[:10] if cache_timestamp else ""
         if cache_date != today_str:
+            continue
+        if not has_useful_legacy_cache_entry(values):
+            logging.info(f"旧 REST 缓存用户 {str(user_id)[-4:]} 没有有效国网业务数据，跳过 MQTT 兜底重发布。")
             continue
         suffix = str(user_id)[-4:]
         if len(suffix) == 4 and suffix not in postfixes:

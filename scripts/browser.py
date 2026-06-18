@@ -69,6 +69,10 @@ def build_driver(config: FetcherConfig):
     driver = webdriver.Chrome(options=chrome_options, service=service)
     driver.implicitly_wait(config.DRIVER_IMPLICITY_WAIT_TIME)
     driver.set_page_load_timeout(config.PAGE_LOAD_TIMEOUT)
+    try:
+        driver.set_script_timeout(int(os.getenv("BROWSER_SCRIPT_TIMEOUT", "20")))
+    except Exception as e:
+        logging.warning(f"设置脚本超时失败: {e}")
 
     _setting_driver(driver)
 

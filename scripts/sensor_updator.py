@@ -5,6 +5,12 @@ from datetime import datetime, timedelta
 
 import requests
 from const import *
+from cache_validity import has_useful_legacy_cache_entry
+
+
+def _mask_user_id(user_id) -> str:
+    user_id = str(user_id or "")
+    return f"****{user_id[-4:]}" if len(user_id) >= 4 else "****"
 
 
 class SensorUpdator:
@@ -33,7 +39,7 @@ class SensorUpdator:
 
 
     def update_one_userid(self, user_id: str, balance: float, last_daily_date: str, last_daily_usage: float, yearly_charge: float, yearly_usage: float, month_charge: float, month_usage: float, tou_data: dict = None, enhanced_balance: dict = None, notify=True):
-        logging.info(f"[{user_id}] 开始更新 Home Assistant 传感器数据...")
+        logging.info(f"[{_mask_user_id(user_id)}] 开始更新 Home Assistant 传感器数据...")
         self._save_to_cache(user_id, balance, last_daily_date, last_daily_usage, yearly_charge, yearly_usage, month_charge, month_usage, tou_data, enhanced_balance)
         postfix = f"_{user_id[-4:]}"
         if balance is not None:
@@ -59,7 +65,7 @@ class SensorUpdator:
         if enhanced_balance and enhanced_balance.get("amount_due") is not None:
             self.update_prepay_balance(postfix, enhanced_balance["amount_due"])
 
-        logging.info(f"[{user_id}] Home Assistant 传感器数据更新完成!")
+        logging.info(f"[{_mask_user_id(user_id)}] Home Assistant 传感器数据更新完成!")
 
     def _get_cache_file(self):
         from const import get_data_dir
@@ -92,6 +98,10 @@ class SensorUpdator:
         if enhanced_balance:
             cache_entry["enhanced_balance"] = enhanced_balance
 
+        if not has_useful_legacy_cache_entry(cache_entry):
+            logging.warning(f"[{_mask_user_id(user_id)}] 缓存条目没有任何有效国网业务数据，跳过写入，避免空缓存阻止后续真实抓取。")
+            return
+
         data[user_id] = cache_entry
 
         try:
@@ -116,18 +126,29 @@ class SensorUpdator:
             logging.error(f"加载缓存文件失败 {abs_cache_file}: {e}")
             return False
 
-        # 检查缓存数据的日期是否与当前日期一致
+        # 检查缓存数据的日期是否与当前日期一致，且必须包含真实业务值。
         today_str = datetime.now().strftime("%Y-%m-%d")
+        valid_items = []
         for user_id, values in data.items():
+            if not isinstance(values, dict):
+                continue
             cache_timestamp = values.get("timestamp", "")
             cache_date = cache_timestamp[:10] if cache_timestamp else ""
             if cache_date != today_str:
                 logging.info(f"缓存数据日期({cache_date})与当前日期({today_str})不一致，需要从国家电网重新获取数据。")
                 return False
+            if not has_useful_legacy_cache_entry(values):
+                logging.warning(f"缓存用户 {str(user_id)[-4:]} 只有户号/空值，没有有效国网业务数据，跳过缓存重推。")
+                continue
+            valid_items.append((user_id, values))
+
+        if not valid_items:
+            logging.info("未找到包含真实国网业务数据的当天缓存，需要从国家电网重新获取数据。")
+            return False
 
         try:
-            for user_id, values in data.items():
-                logging.info(f"正在从缓存重新推送用户 {user_id} 的数据。")
+            for user_id, values in valid_items:
+                logging.info(f"正在从缓存重新推送用户 {_mask_user_id(user_id)} 的数据。")
                 clean_values = {k: v for k, v in values.items() if k != 'timestamp'}
                 self.update_one_userid(user_id, **clean_values, notify=False)
             return True
@@ -323,7 +344,7 @@ class SensorUpdator:
 
         for field_key, sensor_base, label in tou_fields:
             value = tou_values.get(field_key, 0)
-            if value <= 0:
+            if value is None:
                 continue
             sensorName = sensor_base + postfix
             if not self.should_update(sensorName, value, {"last_reset": last_reset}):
