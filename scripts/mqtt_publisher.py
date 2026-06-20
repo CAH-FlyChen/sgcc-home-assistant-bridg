@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
+from cache_validity import has_useful_account_data
 from config import FetcherConfig
 from model import AccountData, DailyReading, MonthlyReading, mask_account_no
 
@@ -79,6 +80,9 @@ class MqttPublisher:
         try:
             account_no = account_data.account.account_no
             masked = mask_account_no(account_no)
+            if not has_useful_account_data(account_data):
+                logging.warning(f"MQTT 发布跳过户号 {masked}: 当前 AccountData 没有有效国网业务数据。")
+                return False
             node = self._safe_topic_part(f"sgcc_{masked}")
             device = {
                 "identifiers": [f"sgcc_{masked}"],
@@ -117,8 +121,8 @@ class MqttPublisher:
                     self._publish(state_topic, self._format_value(value), retain=True)
                     published_states += 1
             if published_configs and not published_states:
-                logging.info("MQTT Discovery 配置已发布，但当前账户数据没有可用状态值。")
-            return published_configs > 0
+                logging.warning("MQTT Discovery 配置已发布，但当前账户数据没有可用状态值；本次 MQTT 发布不视为成功。")
+            return published_configs > 0 and published_states > 0
         except Exception as e:
             logging.warning(f"MQTT 发布失败: {e}")
             return False

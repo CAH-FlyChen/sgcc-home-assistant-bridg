@@ -5,6 +5,7 @@ import threading
 import time
 
 from browser import build_driver, release_driver
+from cache_validity import has_useful_account_data
 from config import FetcherConfig
 from const import LOGIN_URL
 from error_watcher import ErrorWatcher
@@ -163,6 +164,12 @@ class DataFetcher:
                     logging.info(f"用户 ID {masked_user_id} 将被忽略")
                     continue
 
+                if not has_useful_account_data(account_data):
+                    logging.warning(
+                        f"用户 [{masked_user_id}] Path B 只返回户号/元数据，没有任何有效国网业务数据，已跳过。"
+                    )
+                    continue
+
                 store.save_account_data(account_data, run_id)
                 saved_count += 1
                 logging.info(f"用户 [{masked_user_id}] Path B 数据已写入 Store: {account_data_summary(account_data)}")
@@ -183,7 +190,10 @@ class DataFetcher:
                     f"年度用电={update_args['yearly_usage']}度, 年度电费={update_args['yearly_charge']}元, "
                     f"月用电={update_args['month_usage']}度, 月电费={update_args['month_charge']}元")
                 if updator is not None:
-                    updator.update_one_userid(**update_args, cache_values=cache_args)
+                    if updator.update_one_userid(**update_args, cache_values=cache_args) is False:
+                        logging.warning(
+                            f"用户 [{masked_user_id}] Home Assistant REST 发布未完全成功；国网抓取和本地 Store 已完成，不触发重新登录。"
+                        )
                 if mqtt_pub is not None:
                     try:
                         if not mqtt_connected:

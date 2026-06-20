@@ -70,30 +70,43 @@ class SensorUpdator:
         cache_values.pop("user_id", None)
         self._save_to_cache(user_id, **cache_values)
         postfix = f"_{user_id[-4:]}"
+        publish_ok = True
+
+        def record_publish_result(result) -> None:
+            nonlocal publish_ok
+            # Older tests/subclasses may still return None. Treat only explicit
+            # False as a failed HA REST publish.
+            if result is False:
+                publish_ok = False
+
         if balance is not None:
             if notify and self.balance_notify is not None:
                 self.balance_notify(user_id, balance)
-            self.update_balance(postfix, balance, enhanced_balance)
+            record_publish_result(self.update_balance(postfix, balance, enhanced_balance))
         if last_daily_usage is not None:
-            self.update_last_daily_usage(postfix, last_daily_date, last_daily_usage)
+            record_publish_result(self.update_last_daily_usage(postfix, last_daily_date, last_daily_usage))
         if yearly_usage is not None:
-            self.update_yearly_data(postfix, yearly_usage, usage=True)
+            record_publish_result(self.update_yearly_data(postfix, yearly_usage, usage=True))
         if yearly_charge is not None:
-            self.update_yearly_data(postfix, yearly_charge)
+            record_publish_result(self.update_yearly_data(postfix, yearly_charge))
         if month_usage is not None:
-            self.update_month_data(postfix, month_usage, usage=True)
+            record_publish_result(self.update_month_data(postfix, month_usage, usage=True))
         if month_charge is not None:
-            self.update_month_data(postfix, month_charge)
+            record_publish_result(self.update_month_data(postfix, month_charge))
 
         # 分时电量传感器
         if tou_data:
-            self._update_tou_sensors(postfix, tou_data)
+            record_publish_result(self._update_tou_sensors(postfix, tou_data))
 
         # 应交金额传感器
         if enhanced_balance and enhanced_balance.get("amount_due") is not None:
-            self.update_prepay_balance(postfix, enhanced_balance["amount_due"])
+            record_publish_result(self.update_prepay_balance(postfix, enhanced_balance["amount_due"]))
 
-        logging.info(f"[{_mask_user_id(user_id)}] Home Assistant 传感器数据更新完成!")
+        if publish_ok:
+            logging.info(f"[{_mask_user_id(user_id)}] Home Assistant 传感器数据更新完成!")
+        else:
+            logging.warning(f"[{_mask_user_id(user_id)}] Home Assistant 传感器数据未完全发布成功。")
+        return publish_ok
 
     def _get_cache_file(self):
         from const import get_data_dir
@@ -175,11 +188,16 @@ class SensorUpdator:
             return False
 
         try:
+            ok = True
+            republished_count = 0
             for user_id, values in valid_items:
                 logging.info(f"正在从缓存重新推送用户 {_mask_user_id(user_id)} 的数据。")
                 clean_values = {k: v for k, v in values.items() if k != 'timestamp'}
-                self.update_one_userid(user_id, **clean_values, notify=False)
-            return True
+                if self.update_one_userid(user_id, **clean_values, notify=False) is False:
+                    ok = False
+                else:
+                    republished_count += 1
+            return ok and republished_count > 0
         except Exception as e:
             logging.error(f"重新推送数据失败: {e}")
             return False
@@ -233,7 +251,7 @@ class SensorUpdator:
 
         if not self.should_update(sensorName, sensorState, {"last_reset": last_daily_date}):
              logging.info(f"跳过 {sensorName} 的更新，状态相同。")
-             return
+             return True
 
         request_body = {
             "state": sensorState,
@@ -247,15 +265,17 @@ class SensorUpdator:
             },
         }
 
-        self.send_url(sensorName, request_body)
-        logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} kWh")
+        ok = self.send_url(sensorName, request_body)
+        if ok:
+            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} kWh")
+        return ok
 
     def update_balance(self, postfix: str, sensorState: float, enhanced_balance: dict = None):
         sensorName = BALANCE_SENSOR_NAME + postfix
 
         if not self.should_update(sensorName, sensorState):
              logging.info(f"跳过 {sensorName} 的更新，状态相同。")
-             return
+             return True
 
         last_reset = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
         attributes = {
@@ -275,8 +295,10 @@ class SensorUpdator:
             "attributes": attributes,
         }
 
-        self.send_url(sensorName, request_body)
-        logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} CNY")
+        ok = self.send_url(sensorName, request_body)
+        if ok:
+            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} CNY")
+        return ok
 
     def update_month_data(self, postfix: str, sensorState: float, usage=False):
         sensorName = (
@@ -291,7 +313,7 @@ class SensorUpdator:
 
         if not self.should_update(sensorName, sensorState, {"last_reset": last_reset}):
              logging.info(f"跳过 {sensorName} 的更新，状态相同。")
-             return
+             return True
 
         request_body = {
             "state": sensorState,
@@ -305,8 +327,10 @@ class SensorUpdator:
             },
         }
 
-        self.send_url(sensorName, request_body)
-        logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} {'kWh' if usage else 'CNY'}")
+        ok = self.send_url(sensorName, request_body)
+        if ok:
+            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} {'kWh' if usage else 'CNY'}")
+        return ok
 
     def update_yearly_data(self, postfix: str, sensorState: float, usage=False):
         sensorName = (
@@ -322,7 +346,7 @@ class SensorUpdator:
 
         if not self.should_update(sensorName, sensorState, {"last_reset": last_reset}):
              logging.info(f"跳过 {sensorName} 的更新，状态相同。")
-             return
+             return True
 
         request_body = {
             "state": sensorState,
@@ -335,8 +359,10 @@ class SensorUpdator:
                 "state_class": "total_increasing",
             },
         }
-        self.send_url(sensorName, request_body)
-        logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} {'kWh' if usage else 'CNY'}")
+        ok = self.send_url(sensorName, request_body)
+        if ok:
+            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} {'kWh' if usage else 'CNY'}")
+        return ok
 
     def _update_tou_sensors(self, postfix: str, tou_data: dict):
         """更新月度分时电量传感器（谷/平/峰/尖）"""
@@ -355,8 +381,9 @@ class SensorUpdator:
         # 尝试从 daily 数据汇总当月分时电量
         daily_rows = tou_data.get("daily", [])
         if not daily_rows:
-            return
+            return True
 
+        ok = True
         current_month_prefix = current_date.strftime("%Y-%m")
         month_valley = sum(r.get("valley_usage", 0) or 0 for r in daily_rows if str(r.get("date", "")[:7]) == current_month_prefix)
         month_flat = sum(r.get("flat_usage", 0) or 0 for r in daily_rows if str(r.get("date", "")[:7]) == current_month_prefix)
@@ -390,15 +417,18 @@ class SensorUpdator:
                     "friendly_name": f"月度{label}时电量",
                 },
             }
-            self.send_url(sensorName, request_body)
-            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {value} kWh ({label})")
+            send_ok = self.send_url(sensorName, request_body)
+            ok = send_ok and ok
+            if send_ok:
+                logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {value} kWh ({label})")
+        return ok
 
     def update_prepay_balance(self, postfix: str, sensorState: float):
         """更新预付费余额传感器"""
         sensorName = PREPAY_BALANCE_SENSOR_NAME + postfix
         if not self.should_update(sensorName, sensorState):
             logging.info(f"跳过 {sensorName} 的更新，状态相同。")
-            return
+            return True
         last_reset = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
         request_body = {
             "state": sensorState,
@@ -412,10 +442,12 @@ class SensorUpdator:
                 "friendly_name": "预付费余额",
             },
         }
-        self.send_url(sensorName, request_body)
-        logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} CNY")
+        ok = self.send_url(sensorName, request_body)
+        if ok:
+            logging.info(f"Home Assistant 传感器 {sensorName} 状态已更新: {sensorState} CNY")
+        return ok
 
-    def send_url(self, sensorName, request_body):
+    def send_url(self, sensorName, request_body) -> bool:
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + self.token,
@@ -426,5 +458,12 @@ class SensorUpdator:
             logging.debug(
                 f"Home Assistant REST API 调用，POST {url}。响应[{response.status_code}]: {response.content}"
             )
+            if 200 <= response.status_code < 300:
+                return True
+            logging.error(
+                f"Home Assistant REST API 调用失败，POST {url} 返回 HTTP {response.status_code}: {response.content}"
+            )
+            return False
         except Exception as e:
             logging.error(f"Home Assistant REST API 调用失败，原因是 {e}")
+            return False

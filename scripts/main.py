@@ -11,9 +11,13 @@ from sensor_updator import SensorUpdator
 from datetime import datetime,timedelta
 from const import *
 from config import FetcherConfig
-from cache_validity import has_useful_legacy_cache_entry
+from cache_validity import (
+    account_data_has_recent_cache_value,
+    has_useful_account_data,
+    has_useful_legacy_cache_entry,
+)
 from data_fetcher import DataFetcher
-from model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading
+from model import Account, AccountData, Balance, DailyReading, MonthlyReading, YearlyReading, mask_account_no
 from mqtt_publisher import MqttPublisher
 from redact import redact_text
 from store import Store
@@ -95,8 +99,13 @@ def main():
     # 启动时先尝试从缓存恢复
     # 如果缓存恢复成功，则跳过本次启动时的实时抓取，避免频繁重启导致账号被封
     if not republish_cached(updator, config):
-        logging.info("未找到有效缓存，正在从国家电网获取数据...")
-        run_task(fetcher, "startup")
+        if has_recent_cached_business_data(updator, config):
+            logging.warning(
+                "启动时发现有效缓存，但重发布未完全成功；跳过启动抓取以保护账号，等待下轮发布重试。"
+            )
+        else:
+            logging.info("未找到有效缓存，正在从国家电网获取数据...")
+            run_task(fetcher, "startup")
     else:
         logging.info("已从缓存恢复数据，跳过启动时抓取以保护账号。")
 
@@ -115,6 +124,12 @@ def safe_scheduled_job(job_func, *args, **kwargs):
 
 def republish_or_fetch(updator: SensorUpdator | None, fetcher: DataFetcher, config: FetcherConfig):
     if not republish_cached(updator, config):
+        if has_recent_cached_business_data(updator, config):
+            logging.warning(
+                "缓存数据仍然有效，但发布到 Home Assistant/MQTT 未完全成功；"
+                "本轮不触发国网登录，避免因发布端故障放大验证码/风控。"
+            )
+            return
         if env_bool("SGCC_LOGIN_COOLDOWN_ENABLED", True):
             cooldown = get_login_cooldown()
             if cooldown.active:
@@ -153,10 +168,78 @@ def republish_cached(updator: SensorUpdator | None, config: FetcherConfig) -> bo
     if publisher in {"mqtt", "both"}:
         attempted = True
         mqtt_ok = republish_mqtt_from_store(config)
-        if not mqtt_ok:
+        if not mqtt_ok and updator is not None:
             mqtt_ok = republish_mqtt_from_legacy_ha_state(updator, config)
 
     return attempted and rest_ok and mqtt_ok
+
+
+def has_recent_cached_business_data(updator: SensorUpdator | None, config: FetcherConfig) -> bool:
+    """Return True when local cache is useful/fresh enough that a live SGCC login is not helpful.
+
+    This is intentionally independent from publisher success. If HA REST/MQTT
+    publishing fails while cache is still fresh, retrying SGCC login would only
+    amplify captcha/risk-control pressure.
+    """
+    publisher = config.PUBLISHER
+    if publisher not in {"rest", "mqtt", "both"}:
+        publisher = "both"
+
+    if publisher in {"mqtt", "both"} and _store_has_recent_business_data():
+        return True
+    if publisher in {"rest", "both"} and updator is not None and _legacy_cache_has_today_business_data(updator):
+        return True
+    return False
+
+
+def _store_has_recent_business_data() -> bool:
+    try:
+        with Store() as store:
+            account_rows = store.conn.execute(
+                "SELECT account_no FROM accounts ORDER BY account_no"
+            ).fetchall()
+            if not account_rows:
+                return False
+            for row in account_rows:
+                account_no = row["account_no"]
+                account = store.get_account(account_no)
+                if account is None:
+                    return False
+                data = AccountData(
+                    account=account,
+                    balance=store.get_latest_balance(account_no),
+                    yearly=(store.get_yearly(account_no, 1) or [None])[0],
+                    monthly=store.get_monthly(account_no, 24),
+                    daily=store.get_daily(account_no, 31),
+                )
+                if not account_data_has_recent_cache_value(data):
+                    return False
+            return True
+    except Exception as e:
+        logging.warning(f"检查 SQLite Store 缓存新鲜度失败: {redact_text(e)}")
+        return False
+
+
+def _legacy_cache_has_today_business_data(updator: SensorUpdator) -> bool:
+    cache_file = updator._get_cache_file()
+    if not os.path.exists(cache_file):
+        return False
+    try:
+        with open(cache_file, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.warning(f"检查旧 REST 缓存新鲜度失败: {redact_text(e)}")
+        return False
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    for values in data.values():
+        if not isinstance(values, dict):
+            continue
+        cache_timestamp = values.get("timestamp", "")
+        cache_date = cache_timestamp[:10] if cache_timestamp else ""
+        if cache_date == today_str and has_useful_legacy_cache_entry(values):
+            return True
+    return False
 
 
 def republish_mqtt_from_store(config: FetcherConfig) -> bool:
@@ -185,6 +268,19 @@ def republish_mqtt_from_store(config: FetcherConfig) -> bool:
                         monthly=store.get_monthly(account_no, 24),
                         daily=store.get_daily(account_no, 31),
                     )
+                    masked_account = mask_account_no(account_no)
+                    if not has_useful_account_data(data):
+                        logging.warning(
+                            f"SQLite Store 缓存户号 {masked_account} 没有有效国网业务数据，跳过 MQTT 重发布。"
+                        )
+                        ok = False
+                        continue
+                    if not account_data_has_recent_cache_value(data):
+                        logging.info(
+                            f"SQLite Store 缓存户号 {masked_account} 没有足够新的日用电/余额数据，需要真实抓取。"
+                        )
+                        ok = False
+                        continue
                     if publisher.publish_account_data(data):
                         published_count += 1
                     else:
@@ -347,6 +443,14 @@ def _state_float(state_obj) -> float | None:
         return None
 
 
+def _retry_backoff_seconds(retry_times: int) -> float:
+    base = float(os.getenv("SGCC_RETRY_BACKOFF_SECONDS", "30"))
+    max_seconds = float(os.getenv("SGCC_RETRY_BACKOFF_MAX_SECONDS", "300"))
+    jitter = float(os.getenv("SGCC_RETRY_BACKOFF_JITTER_SECONDS", "10"))
+    delay = min(max_seconds, base * (2 ** max(0, retry_times - 1)))
+    return delay + random.uniform(0, jitter)
+
+
 def run_task(data_fetcher: DataFetcher, trigger_type: str = "manual"):
     for retry_times in range(1, RETRY_TIMES_LIMIT + 1):
         try:
@@ -362,7 +466,12 @@ def run_task(data_fetcher: DataFetcher, trigger_type: str = "manual"):
             )
             return
         except Exception as e:
-            logging.error(f"状态刷新任务失败，原因是 [{data_fetcher._redact_text(e)}]，还剩 {RETRY_TIMES_LIMIT - retry_times} 次重试机会。")
+            remaining = RETRY_TIMES_LIMIT - retry_times
+            logging.error(f"状态刷新任务失败，原因是 [{data_fetcher._redact_text(e)}]，还剩 {remaining} 次重试机会。")
+            if remaining > 0:
+                delay = _retry_backoff_seconds(retry_times)
+                logging.info(f"将在 {delay:.1f} 秒后重试，降低连续登录/验证码风控概率。")
+                time.sleep(delay)
             continue
 
 def logger_init(level: str):
