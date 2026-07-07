@@ -222,8 +222,8 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 | `MQTT_DISCOVERY_PREFIX` | Home Assistant MQTT Discovery 前缀，默认 `homeassistant`。 |
 | `SGCC_DB_PATH` | SQLite 数据库路径，默认 `/data/sgcc.sqlite3`。 |
 | `SCRAPER_SETTLE_SECONDS` | Path B 抓取等待 Vuex/组件数据稳定的秒数。 |
-| `SGCC_MONEY_DIAG` | 结构化金额诊断开关，默认 `false`；开启后打印 Vue/Vuex/组件 data 中的余额、预付费、欠费、账单金额候选字段。 |
-| `SGCC_MONEY_DIAG_LIMIT` | 金额诊断最多打印的候选字段数量，默认 `80`。 |
+| `SGCC_DIAG` | 单开关诊断模式，默认 `false`；开启后输出 `SGCC DIAG SUMMARY` 日志，并写入脱敏诊断包。 |
+| `SGCC_DIAG_DIR` | 诊断包目录，默认 `/data/diag`；最新一次固定在 `/data/diag/latest`。 |
 | `REPUBLISH_INTERVAL_MINUTES` | 已有数据重发布或补抓的间隔分钟数。 |
 | `SGCC_BROWSER_MODE` | 浏览器模式，Docker Compose 和 Add-on 默认 `browser-service`；旧模式可设 `local`。 |
 | `SGCC_CDP_ADDRESS` | `browser-service` / `host-cdp` 使用的 Chrome DevTools 地址，默认 `127.0.0.1:19222`。 |
@@ -380,16 +380,28 @@ Docker Compose 和 Add-on 部署优先使用默认的 `SGCC_BROWSER_MODE=browser
 - `PUBLISHER` 是否为 `mqtt` 或 `both`。
 - 容器日志里是否有 MQTT 发布失败。
 
-### 金额/余额字段排障
+### 诊断模式与 issue 反馈
 
-国网页面里的金额可能同时包含当前账户余额、预付费余额、应交金额、上期结余、月账单金额等不同口径。排查金额类问题时，可以临时开启结构化金额诊断：
+`SGCC_DIAG=true` 是面向 issue 反馈的单开关诊断模式。开启后重新运行一次抓取，程序会在日志中输出可复制的摘要块：
 
-```env
-SGCC_MONEY_DIAG=true
-SGCC_MONEY_DIAG_LIMIT=80
+```text
+========== SGCC DIAG SUMMARY START ==========
+...
+========== SGCC DIAG SUMMARY END ==========
 ```
 
-诊断日志只读取 Path B 已采集的 Vuex state/getters 和 Vue 组件 `data`，不会从渲染后的 DOM 文本猜金额，也不会改变实际发布结果。日志会输出金额候选字段的分类、字段路径、金额、时间、账期和脱敏户号；提交 issue 时复制 `Path B 金额诊断摘要` 和 `Path B 金额候选[...]` 相关行即可。
+同时会写入脱敏诊断包：
+
+```text
+/data/diag/latest/summary.txt
+/data/diag/latest/summary.json
+/data/diag/latest/fields.redacted.json
+```
+
+诊断内容覆盖当前运行环境、登录会话、账户选择、页面解析、金额候选字段、日/月/年用电范围、HA REST/MQTT 发布结果和失败错误。`fields.redacted.json` 记录 Path B 已采集的 Vuex state/getters 和 Vue 组件 `data` 字段清单；它不依赖渲染后的 DOM 文本猜测业务字段，也不会改变实际解析或发布结果。
+
+金额问题里的“当前账户余额、预付费余额、应交/欠费、出账金额、上期/上月余额”可能来自不同字段。字段兼容以 `SGCC_DIAG` 返回的真实脱敏字段为依据；提交 issue 时贴 `SGCC DIAG SUMMARY` 摘要，并在需要时附上 `/data/diag/latest` 里的脱敏文件。
+
 
 ### 日/月历史数量不固定
 

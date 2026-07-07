@@ -85,7 +85,7 @@ PARSER_MONEY_KEYS = (
 )
 
 DIAG_ONLY_MONEY_KEYS = (
-    # 泛字段只供 SGCC_MONEY_DIAG 取证；parser 默认不把它们当余额。
+    # 泛字段只供 SGCC_DIAG 取证；parser 默认不把它们当余额。
     "balance",
     "bal",
 )
@@ -120,9 +120,9 @@ return Array.from(document.querySelectorAll('*'))
 """
 
 
-def _selected_vue_data_script(include_money_diag: bool = False) -> str:
+def _selected_vue_data_script(include_diag_fields: bool = False) -> str:
     keys = [*CORE_WANTED_KEYS, *PARSER_MONEY_KEYS]
-    if include_money_diag:
+    if include_diag_fields:
         keys.extend(DIAG_ONLY_MONEY_KEYS)
     keys = list(dict.fromkeys(keys))
     return SELECTED_VUE_DATA_SCRIPT_TEMPLATE.replace(
@@ -131,7 +131,7 @@ def _selected_vue_data_script(include_money_diag: bool = False) -> str:
     )
 
 
-SELECTED_VUE_DATA_SCRIPT = _selected_vue_data_script(include_money_diag=False)
+SELECTED_VUE_DATA_SCRIPT = _selected_vue_data_script(include_diag_fields=False)
 
 
 STORE_SNAPSHOT_SCRIPT = """
@@ -164,6 +164,6 @@ def selected_store_state(driver) -> dict[str, Any]:
     return snapshot.get("state") or {}
 
 
-def selected_vue_data(driver, include_money_diag: bool = False) -> list[dict[str, Any]]:
+def selected_vue_data(driver, include_diag_fields: bool = False) -> list[dict[str, Any]]:
     """执行JS脚本，从当前页面提取Vue状态数据。"""
-    return driver.execute_script(_selected_vue_data_script(include_money_diag)) or []
+    return driver.execute_script(_selected_vue_data_script(include_diag_fields)) or []

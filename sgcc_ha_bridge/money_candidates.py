@@ -1,23 +1,19 @@
-"""Structured money diagnostics for Path B Vue/Vuex snapshots.
+"""Structured money candidate extraction for SGCC diagnostics.
 
-This module is intentionally observational: it does not change parser output and
-it does not scrape rendered DOM text.  It inspects the structured data already
-captured from Vuex state/getters and Vue component ``data`` to help users report
-which SGCC money-like fields exist on their province/account pages.
+This module is observational: it does not change parser output and it does not
+scrape rendered DOM text. It inspects structured Vuex state/getters and Vue
+component data captured by the single SGCC_DIAG diagnostic flow.
 """
 from __future__ import annotations
 
-import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional
 
-from .model import AccountData, mask_account_no
-from .redact import redact_text, redact_url
+from .model import mask_account_no
 
 
-DEFAULT_MONEY_DIAG_LIMIT = 80
+DEFAULT_MONEY_CANDIDATE_LIMIT = 80
 
 _LABEL_KEYS = ("label", "name", "title", "text", "itemName", "fieldName", "field", "desc", "caption")
 _ACCOUNT_KEYS = ("consNo", "consNo_dst", "accountNo", "acctNo", "user_id", "userId", "selectValue")
@@ -63,17 +59,6 @@ class MoneyCandidate:
     period: str = ""
 
 
-def money_diag_enabled() -> bool:
-    return str(os.getenv("SGCC_MONEY_DIAG", "false")).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def money_diag_limit() -> int:
-    try:
-        return max(1, int(os.getenv("SGCC_MONEY_DIAG_LIMIT", str(DEFAULT_MONEY_DIAG_LIMIT))))
-    except (TypeError, ValueError):
-        return DEFAULT_MONEY_DIAG_LIMIT
-
-
 def collect_money_candidates(
     store: Any = None,
     components: Any = None,
@@ -85,7 +70,7 @@ def collect_money_candidates(
     a fallback source, because display copy lacks enough business context to
     distinguish current balance, prepay balance, arrears, and bill charges.
     """
-    max_items = DEFAULT_MONEY_DIAG_LIMIT if limit is None else max(1, limit)
+    max_items = DEFAULT_MONEY_CANDIDATE_LIMIT if limit is None else max(1, limit)
     result: list[MoneyCandidate] = []
     seen: set[tuple[str, str, str]] = set()
     for root_path, root_value in _iter_source_roots(store, components):
@@ -98,53 +83,6 @@ def collect_money_candidates(
             if len(result) >= max_items:
                 return result
     return result
-
-
-def log_money_diagnostics(
-    snapshot: dict[str, Any],
-    parsed: AccountData,
-    page_label: str,
-    limit: Optional[int] = None,
-) -> None:
-    max_items = money_diag_limit() if limit is None else max(1, limit)
-    candidates = collect_money_candidates(
-        store=snapshot.get("store"),
-        components=snapshot.get("components"),
-        limit=max_items,
-    )
-    balance = parsed.balance if parsed else None
-    account_no = parsed.account.account_no if parsed and parsed.account else ""
-    logging.info(
-        "Path B 金额诊断摘要: "
-        f"page={page_label}, "
-        f"url={redact_url(str(snapshot.get('url') or ''))}, "
-        f"account={mask_account_no(account_no)}, "
-        f"parsed_balance={balance.balance_cny if balance else None}, "
-        f"parsed_prepay={balance.prepay_balance_cny if balance else None}, "
-        f"parsed_arrears={balance.arrears_cny if balance else None}, "
-        f"candidates={len(candidates)}"
-    )
-    for index, candidate in enumerate(candidates, 1):
-        logging.info(_format_candidate_line(index, candidate))
-
-
-def _format_candidate_line(index: int, candidate: MoneyCandidate) -> str:
-    parts = [
-        f"Path B 金额候选[{index}]:",
-        f"category={candidate.category}",
-        f"source={candidate.source}",
-        f"key={candidate.key}",
-        f"value={_format_float(candidate.value)}",
-    ]
-    if candidate.time:
-        parts.append(f"time={candidate.time}")
-    if candidate.period:
-        parts.append(f"period={candidate.period}")
-    if candidate.account:
-        parts.append(f"account={candidate.account}")
-    if candidate.label:
-        parts.append(f"label={redact_text(candidate.label[:40])}")
-    return f"{parts[0]} {', '.join(parts[1:])}"
 
 
 def _iter_source_roots(store: Any, components: Any) -> Iterable[tuple[str, Any]]:

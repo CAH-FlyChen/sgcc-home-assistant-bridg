@@ -12,13 +12,13 @@ class VueStateScriptTestCase(unittest.TestCase):
         for key in ("balance", "bal"):
             self.assertNotIn(f'"{key}"', SELECTED_VUE_DATA_SCRIPT)
 
-    def test_money_diag_fields_are_collected_when_requested(self):
-        script = _selected_vue_data_script(include_money_diag=True)
+    def test_diag_fields_are_collected_when_requested(self):
+        script = _selected_vue_data_script(include_diag_fields=True)
 
         for key in ("balance", "bal"):
             self.assertIn(f'"{key}"', script)
 
-    def test_selected_vue_data_passes_money_diag_flag(self):
+    def test_selected_vue_data_passes_diag_fields_flag(self):
         class FakeDriver:
             def __init__(self):
                 self.script = ""
@@ -29,7 +29,7 @@ class VueStateScriptTestCase(unittest.TestCase):
 
         driver = FakeDriver()
 
-        selected_vue_data(driver, include_money_diag=True)
+        selected_vue_data(driver, include_diag_fields=True)
 
         self.assertIn('"balance"', driver.script)
 

@@ -21,17 +21,24 @@ from selenium.webdriver.support.ui import WebDriverWait
 from .const import BALANCE_URL, ELECTRIC_USAGE_URL
 from .model import AccountData, mask_account_no
 from .parser import merge_account_data, parse_account_data
-from .money_diag import log_money_diagnostics, money_diag_enabled
+from .diag import diag_enabled
 from . import vue_state
 
 
 class Scraper:
     """Scrape AccountData from an attached, logged-in Selenium driver."""
 
-    def __init__(self, driver, wait_seconds: int = 12, settle_seconds: Optional[float] = None):
+    def __init__(
+        self,
+        driver,
+        wait_seconds: int = 12,
+        settle_seconds: Optional[float] = None,
+        diagnostic: Any = None,
+    ):
         self.driver = driver
         self.wait_seconds = wait_seconds
         self.settle_seconds = self._settle_seconds_from_env() if settle_seconds is None else settle_seconds
+        self.diagnostic = diagnostic
 
     @staticmethod
     def _settle_seconds_from_env() -> float:
@@ -58,6 +65,8 @@ class Scraper:
         self._navigate(BALANCE_URL, "账户余额")
         selector_option_count = len(self._visible_account_options())
         logging.info(f"Path B 账户候选: 当前账户 + {selector_option_count} 个下拉选项。")
+        if self.diagnostic is not None:
+            self.diagnostic.record_selector_options(selector_option_count)
 
         results: list[AccountData] = []
         seen_accounts: set[str] = set()
@@ -152,8 +161,11 @@ class Scraper:
             f"monthly={len(data.monthly)}, daily={len(data.daily)}, "
             f"yearly={'yes' if data.yearly else 'no'}"
         )
-        if money_diag_enabled():
-            log_money_diagnostics(snapshot, data, label)
+        if self.diagnostic is not None:
+            try:
+                self.diagnostic.record_page(label, snapshot, data)
+            except Exception as diag_error:
+                logging.warning(f"SGCC DIAG 记录页面诊断失败，已忽略: {diag_error}")
         return data
 
     def _snapshot(self) -> dict[str, Any]:
@@ -168,7 +180,7 @@ class Scraper:
         try:
             components = vue_state.selected_vue_data(
                 self.driver,
-                include_money_diag=money_diag_enabled(),
+                include_diag_fields=diag_enabled(),
             ) or []
         except Exception:
             components = []

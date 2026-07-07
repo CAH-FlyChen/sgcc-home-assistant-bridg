@@ -18,7 +18,7 @@ _MASKED_ACCOUNT_RE = re.compile(r"\*+(\d{4})$")
 
 _BALANCE_KEYS = (
     # Confirmed structured current-balance fields. Keep this list small: new
-    # aliases should come from SGCC_MONEY_DIAG evidence, not guesses.
+    # aliases should come from SGCC_DIAG evidence, not guesses.
     "accountBalance",
 )
 _LEGACY_BALANCE_ALIAS_KEYS = (
@@ -269,7 +269,7 @@ def _pick_account_no(values: list[Any], account_obj: dict[str, Any]) -> str:
 def _pick_balance_obj(values: list[Any]) -> dict[str, Any]:
     """Pick one well-scoped balance source instead of merging the whole tree.
 
-    Compatibility rules here must be backed by real SGCC_MONEY_DIAG evidence.
+    Compatibility rules here must be backed by real SGCC_DIAG evidence.
     Diagnostics can be broad; the parser stays narrow and explainable.
     """
     candidates: list[tuple[int, int, int, dict[str, Any]]] = []

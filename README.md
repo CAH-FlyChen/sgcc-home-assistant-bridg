@@ -99,7 +99,25 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 REST 兼容实体仍可用，主要用于迁移旧仪表盘或自动化。详细实体说明见 [DOCS.md#5-home-assistant-实体](DOCS.md#5-home-assistant-实体)。
 
-金额、余额、预付费余额、应交金额或上月余额口径不一致时，按 [DOCS.md#金额余额字段排障](DOCS.md#金额余额字段排障) 开启 `SGCC_MONEY_DIAG=true`，复制结构化诊断日志到 issue。
+数据缺失、登录异常、发布异常或金额口径不一致时，按 [DOCS.md#诊断模式与-issue-反馈](DOCS.md#诊断模式与-issue-反馈) 开启 `SGCC_DIAG=true`，运行一次后把诊断摘要贴到 issue。
+
+## 诊断模式
+
+提交 issue 前可以临时开启单开关诊断：
+
+```env
+SGCC_DIAG=true
+```
+
+开启后重新运行一次抓取，日志会输出 `SGCC DIAG SUMMARY` 可复制摘要，并在容器数据目录写入脱敏诊断包：
+
+```text
+/data/diag/latest/summary.txt
+/data/diag/latest/summary.json
+/data/diag/latest/fields.redacted.json
+```
+
+诊断包覆盖运行环境、登录会话、账户解析、金额候选、日/月/年用电范围、HA/MQTT 发布和错误信息。字段兼容改动以 `SGCC_DIAG` 返回的真实脱敏字段为依据。
 
 ## Lovelace 示例
 
