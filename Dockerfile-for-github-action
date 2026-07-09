@@ -34,7 +34,17 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
         > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
-    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 google-chrome-stable \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        -o Acquire::Retries=3 \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
+        google-chrome-stable \
+    || (apt-get update -o Acquire::Retries=3 \
+        && apt-get install -f -y -o Acquire::Retries=3 \
+        && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            -o Acquire::Retries=3 \
+            -o Dpkg::Options::="--force-confdef" \
+            google-chrome-stable) \
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 4: matching ChromeDriver + timezone
