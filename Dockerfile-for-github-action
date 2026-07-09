@@ -26,14 +26,17 @@ RUN eatmydata apt-get --allow-releaseinfo-change update -o Acquire::Retries=5 \
         fonts-noto-cjk chromium chromium-driver xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 3: Google Chrome (direct .deb download, bypasses apt for QEMU stability)
+# Layer 3: Google Chrome (download .deb then apt install to resolve deps automatically)
 RUN curl -fsSL --retry 10 --retry-delay 15 --connect-timeout 60 --max-time 900 \
         -o /tmp/chrome.deb \
         "https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb" \
-    && eatmydata dpkg -i /tmp/chrome.deb 2>&1 || true \
     && eatmydata apt-get update -o Acquire::Retries=5 \
-    && eatmydata apt-get install -f -y --no-install-recommends \
-        -o Acquire::Retries=5 -o Dpkg::Options::="--force-confdef" \
+    && eatmydata DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        -o Acquire::Retries=5 \
+        -o Acquire::http::Timeout=300 \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
+        /tmp/chrome.deb \
     && rm -f /tmp/chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
