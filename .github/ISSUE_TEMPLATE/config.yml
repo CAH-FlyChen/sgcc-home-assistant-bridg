@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: README / 使用文档
-    url: https://github.com/MaribelHearm/sgcc-home-assistant-bridg#readme
+    url: https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg#readme
     about: 提交问题前建议先看 README 与 DOCS。
   - name: LINUX DO 推广帖
     url: https://linux.do/t/topic/2431381

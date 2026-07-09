@@ -1,8 +1,8 @@
 # SGCC Home Assistant Bridge
 
-[![License](https://img.shields.io/github/license/MaribelHearm/sgcc-home-assistant-bridg)](LICENSE)
-[![Release](https://img.shields.io/github/v/tag/MaribelHearm/sgcc-home-assistant-bridg?label=release)](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/tags)
-[![CI and Docker Image](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml/badge.svg)](https://github.com/MaribelHearm/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml)
+[![License](https://img.shields.io/github/license/CAH-FlyChen/sgcc-home-assistant-bridg)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/CAH-FlyChen/sgcc-home-assistant-bridg?label=release)](https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg/tags)
+[![CI and Docker Image](https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml/badge.svg)](https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg/actions/workflows/docker-image.yml)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Discovery-41BDF5)](https://www.home-assistant.io/integrations/mqtt/)
 
 把国家电网 / 网上国网 / 95598 的电费余额、日用电、月度用电、年度用电和峰平谷尖分时电量接入 Home Assistant。
@@ -79,7 +79,7 @@ docker compose up -d
 Home Assistant OS / Supervised 可以添加 Add-on/App 仓库：
 
 ```text
-https://github.com/MaribelHearm/sgcc-home-assistant-bridg
+https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg
 ```
 
 完整部署说明见 [DOCS.md](DOCS.md)。

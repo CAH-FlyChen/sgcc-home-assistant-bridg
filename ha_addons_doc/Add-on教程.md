@@ -5,7 +5,7 @@
 仓库地址：
 
 ```text
-https://github.com/MaribelHearm/sgcc-home-assistant-bridg
+https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg
 ```
 
 当前状态：
@@ -29,7 +29,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 6. 添加本项目仓库地址：
 
 ```text
-https://github.com/MaribelHearm/sgcc-home-assistant-bridg
+https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg
 ```
 
 7. 保存后刷新 Store。
@@ -126,14 +126,14 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 
 ### 找不到 Add-on/App
 
-- 检查仓库地址是否为：`https://github.com/MaribelHearm/sgcc-home-assistant-bridg`
+- 检查仓库地址是否为：`https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg`
 - 刷新 Store。
 - 确认主机架构是 `aarch64`。
 
 ### 安装失败
 
 - 检查 HAOS/Supervisor 能否拉取 GHCR 镜像。
-- 镜像为：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.5`
+- 镜像为：`ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:v0.1.5`
 - 国内网络如果拉取 GHCR 很慢，可以先确认 HAOS/Supervisor 能访问 GHCR；当前 Add-on 默认使用 GHCR app 镜像。
 
 ### 验证码/登录未通过

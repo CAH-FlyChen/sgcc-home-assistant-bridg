@@ -113,8 +113,8 @@ jobs:
         run: |
           echo "GHCR_IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sgcc-home-assistant-bridge" >> "$GITHUB_ENV"
           echo "GHCR_BROWSER_IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sgcc-home-assistant-bridge-browser" >> "$GITHUB_ENV"
-          echo "ALIYUN_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha" >> "$GITHUB_ENV"
-          echo "ALIYUN_BROWSER_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/maribelhearm/sgcc_ha" >> "$GITHUB_ENV"
+          echo "ALIYUN_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/CAH-FlyChen/sgcc_ha" >> "$GITHUB_ENV"
+          echo "ALIYUN_BROWSER_IMAGE_NAME=crpi-uqxz2jxgnrieto82.cn-hangzhou.personal.cr.aliyuncs.com/CAH-FlyChen/sgcc_ha" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

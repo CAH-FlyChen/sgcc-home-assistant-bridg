@@ -2,7 +2,7 @@ name: "SGCC Home Assistant Bridge"
 version: "v0.1.5"
 slug: "sgcc_home_assistant_bridge"
 description: "国家电网 / SGCC / 95598 电费与用电数据 Home Assistant 桥接插件"
-url: "https://github.com/MaribelHearm/sgcc-home-assistant-bridg"
+url: "https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg"
 arch:
   - aarch64
 host_network: true
@@ -11,7 +11,7 @@ boot: auto
 init: false
 stage: experimental
 legacy: true
-image: "ghcr.io/maribelhearm/sgcc-home-assistant-bridge"
+image: "ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge"
 map:
   # - addons:rw
   - config:rw
