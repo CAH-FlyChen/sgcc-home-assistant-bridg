@@ -14,37 +14,27 @@ ENV PYTHON_IN_DOCKER='PYTHON_IN_DOCKER'
 
 WORKDIR /app
 
-# Layer 1: basic system deps (small, fast)
-RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
-    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
-        ca-certificates curl gnupg jq unzip tzdata \
+# Layer 1: basic system deps + eatmydata (disables fsync for QEMU speedup)
+RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=5 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
+        ca-certificates curl gnupg jq unzip tzdata eatmydata \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 2: chromium + xvfb + fonts (large, but cached separately)
-RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
-    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+# Layer 2: chromium + xvfb + fonts (eatmydata for QEMU speedup)
+RUN eatmydata apt-get --allow-releaseinfo-change update -o Acquire::Retries=5 \
+    && eatmydata apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
         fonts-noto-cjk chromium chromium-driver xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 3: Google Chrome
-RUN install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL --retry 3 https://dl.google.com/linux/linux_signing_key.pub \
-        | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
-    && chmod a+r /etc/apt/keyrings/google-linux.gpg \
-    && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
-        > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        -o Acquire::Retries=3 \
-        -o Dpkg::Options::="--force-confdef" \
-        -o Dpkg::Options::="--force-confold" \
-        google-chrome-stable \
-    || (apt-get update -o Acquire::Retries=3 \
-        && apt-get install -f -y -o Acquire::Retries=3 \
-        && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            -o Acquire::Retries=3 \
-            -o Dpkg::Options::="--force-confdef" \
-            google-chrome-stable) \
+# Layer 3: Google Chrome (direct .deb download, bypasses apt for QEMU stability)
+RUN curl -fsSL --retry 10 --retry-delay 15 --connect-timeout 60 --max-time 900 \
+        -o /tmp/chrome.deb \
+        "https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb" \
+    && eatmydata dpkg -i /tmp/chrome.deb 2>&1 || true \
+    && eatmydata apt-get update -o Acquire::Retries=5 \
+    && eatmydata apt-get install -f -y --no-install-recommends \
+        -o Acquire::Retries=5 -o Dpkg::Options::="--force-confdef" \
+    && rm -f /tmp/chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 4: matching ChromeDriver + timezone
