@@ -133,7 +133,7 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 ### 安装失败
 
 - 检查 HAOS/Supervisor 能否拉取 GHCR 镜像。
-- 镜像为：`ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:v0.1.5`
+- 镜像为：`ghcr.io/cah-flychen/sgcc-home-assistant-bridge:v0.1.5`
 - 国内网络如果拉取 GHCR 很慢，可以先确认 HAOS/Supervisor 能访问 GHCR；当前 Add-on 默认使用 GHCR app 镜像。
 
 ### 验证码/登录未通过

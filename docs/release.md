@@ -22,8 +22,8 @@
 GHCR 使用两个仓库：
 
 ```text
-ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge
-ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge-browser
+ghcr.io/cah-flychen/sgcc-home-assistant-bridge
+ghcr.io/cah-flychen/sgcc-home-assistant-bridge-browser
 ```
 
 常用 tag：

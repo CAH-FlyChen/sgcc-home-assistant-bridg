@@ -66,15 +66,15 @@ docker compose up -d
 默认 GHCR 镜像：
 
 ```env
-SGCC_APP_IMAGE=ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:latest
-SGCC_BROWSER_IMAGE=ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge-browser:latest
+SGCC_APP_IMAGE=ghcr.io/cah-flychen/sgcc-home-assistant-bridge:latest
+SGCC_BROWSER_IMAGE=ghcr.io/cah-flychen/sgcc-home-assistant-bridge-browser:latest
 ```
 
 固定版本可以使用：
 
 ```env
-SGCC_APP_IMAGE=ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:v0.1.5
-SGCC_BROWSER_IMAGE=ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge-browser:v0.1.5
+SGCC_APP_IMAGE=ghcr.io/cah-flychen/sgcc-home-assistant-bridge:v0.1.5
+SGCC_BROWSER_IMAGE=ghcr.io/cah-flychen/sgcc-home-assistant-bridge-browser:v0.1.5
 ```
 
 Compose 使用 `browser-service` 时，app/browser 两个镜像建议固定到同一个 tag，避免 app 内 ChromeDriver 与 browser-service Chrome 版本不一致。
@@ -183,7 +183,7 @@ https://github.com/CAH-FlyChen/sgcc-home-assistant-bridg
 
 - 当前预构建镜像发布 `aarch64`。
 - `config.yaml` 的 `version` 使用 `v0.1.5`，与 GHCR tag 对齐。
-- Add-on/App 使用 GHCR app 镜像：`ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:v0.1.5`。
+- Add-on/App 使用 GHCR app 镜像：`ghcr.io/cah-flychen/sgcc-home-assistant-bridge:v0.1.5`。
 - Add-on/App 是单容器部署，镜像内已经安装官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - Add-on/App 默认 `SGCC_BROWSER_MODE=browser-service`，入口脚本会启动内嵌 browser manager；Chrome 本体只在抓取/登录时按需启动，任务结束后默认关闭。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动；真实国网登录、LLM 验证码和 MQTT 发布仍建议按自己的账号环境跑一轮。
@@ -412,7 +412,7 @@ Docker Compose 和 Add-on 部署优先使用默认的 `SGCC_BROWSER_MODE=browser
 确认 package visibility 是 Public，然后测试：
 
 ```bash
-docker pull ghcr.io/CAH-FlyChen/sgcc-home-assistant-bridge:latest
+docker pull ghcr.io/cah-flychen/sgcc-home-assistant-bridge:latest
 ```
 
 国内网络也可以直接拉阿里云 ACR 镜像：
