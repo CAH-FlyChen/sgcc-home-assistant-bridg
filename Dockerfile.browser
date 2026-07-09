@@ -6,20 +6,32 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=Asia/Shanghai \
     LANG=C.UTF-8
 
-RUN apt-get --allow-releaseinfo-change update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg fonts-noto-cjk tzdata \
-        xvfb fluxbox x11vnc novnc websockify \
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
+# Layer 1: basic system deps (small, fast)
+RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+        ca-certificates curl gnupg tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 2: desktop/VNC stack (large, cached separately)
+RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+        fonts-noto-cjk xvfb fluxbox x11vnc novnc websockify \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 3: Google Chrome
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL --retry 3 https://dl.google.com/linux/linux_signing_key.pub \
+        | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
     && chmod a+r /etc/apt/keyrings/google-linux.gpg \
-    && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get --allow-releaseinfo-change update \
-    && apt-get install -y --no-install-recommends google-chrome-stable \
-    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
-    && echo $TZ > /etc/timezone \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 4: timezone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
 
 WORKDIR /app
 COPY sgcc_ha_bridge/ /app/sgcc_ha_bridge/

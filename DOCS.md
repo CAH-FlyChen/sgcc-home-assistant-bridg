@@ -181,7 +181,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 说明：
 
-- 当前预构建镜像只发布 `amd64`，所以 `config.yaml` 也先只声明 `amd64`。
+- 当前预构建镜像发布 `aarch64`。
 - `config.yaml` 的 `version` 使用 `v0.1.5`，与 GHCR tag 对齐。
 - Add-on/App 使用 GHCR app 镜像：`ghcr.io/maribelhearm/sgcc-home-assistant-bridge:v0.1.5`。
 - Add-on/App 是单容器部署，镜像内已经安装官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。

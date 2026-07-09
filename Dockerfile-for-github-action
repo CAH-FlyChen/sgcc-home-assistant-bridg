@@ -14,33 +14,45 @@ ENV PYTHON_IN_DOCKER='PYTHON_IN_DOCKER'
 
 WORKDIR /app
 
-RUN apt-get --allow-releaseinfo-change update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg jq unzip fonts-noto-cjk tzdata \
-        chromium chromium-driver \
-        xvfb \
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
+# Layer 1: basic system deps (small, fast)
+RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+        ca-certificates curl gnupg jq unzip tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 2: chromium + xvfb + fonts (large, but cached separately)
+RUN apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+        fonts-noto-cjk chromium chromium-driver xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 3: Google Chrome
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL --retry 3 https://dl.google.com/linux/linux_signing_key.pub \
+        | gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg \
     && chmod a+r /etc/apt/keyrings/google-linux.gpg \
-    && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get --allow-releaseinfo-change update \
-    && apt-get install -y --no-install-recommends google-chrome-stable \
-    && CHROME_VERSION="$(google-chrome --product-version)" \
+    && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get --allow-releaseinfo-change update -o Acquire::Retries=3 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=3 google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# Layer 4: matching ChromeDriver + timezone
+RUN CHROME_VERSION="$(google-chrome --product-version)" \
     && CHROME_BUILD="${CHROME_VERSION%.*}" \
     && CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" \
-    && if ! curl -fsI "$CHROMEDRIVER_URL" >/dev/null; then \
-         CHROMEDRIVER_VERSION="$(curl -fsSL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_BUILD}")"; \
+    && if ! curl -fsSL --retry 3 --head "$CHROMEDRIVER_URL" >/dev/null 2>&1; then \
+         CHROMEDRIVER_VERSION="$(curl -fsSL --retry 3 "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_BUILD}")"; \
          CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip"; \
        fi \
-    && curl -fsSL -o /tmp/chromedriver-linux-arm64.zip "$CHROMEDRIVER_URL" \
+    && curl -fsSL --retry 3 -o /tmp/chromedriver-linux-arm64.zip "$CHROMEDRIVER_URL" \
     && unzip -q /tmp/chromedriver-linux-arm64.zip -d /tmp \
     && install -m 0755 /tmp/chromedriver-linux-arm64/chromedriver /usr/local/bin/chromedriver \
+    && rm -rf /tmp/chromedriver-linux-arm64.zip /tmp/chromedriver-linux-arm64 \
     && /usr/local/bin/chromedriver --version \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
-    && dpkg-reconfigure --frontend noninteractive tzdata \
-    && rm -rf /var/lib/apt/lists/*  \
-    && apt-get clean
+    && dpkg-reconfigure --frontend noninteractive tzdata
 
 COPY ./requirements.txt /tmp/requirements.txt
 

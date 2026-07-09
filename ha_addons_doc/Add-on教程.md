@@ -10,7 +10,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 当前状态：
 
-- 预构建镜像先支持 `amd64`。
+- 预构建镜像支持 `aarch64`。
 - 当前 Add-on 版本 `v0.1.5`，默认使用官方 Google Chrome `browser-service` 模式。
 - Add-on 是单容器部署，镜像内已经包含官方 `google-chrome-stable` 和匹配 ChromeDriver；用户不需要在 HAOS、宿主机或 NAS 上另装 Google Chrome。
 - 已在 HAOS 18.0 / Supervisor 2026.06.2 上验证仓库添加、识别、安装和启动。
@@ -49,7 +49,7 @@ https://github.com/MaribelHearm/sgcc-home-assistant-bridg
 
 - 确认仓库地址没有拼错，仓库名是 `sgcc-home-assistant-bridg`。
 - 刷新 Store。
-- 确认当前 HAOS / Supervised 主机架构是 `amd64`。
+- 确认当前 HAOS / Supervised 主机架构是 `aarch64`。
 
 ### 3. 配置
 
@@ -128,7 +128,7 @@ MQTT Discovery 正常后，Home Assistant 会出现类似下面的设备：
 
 - 检查仓库地址是否为：`https://github.com/MaribelHearm/sgcc-home-assistant-bridg`
 - 刷新 Store。
-- 确认主机架构是 `amd64`。
+- 确认主机架构是 `aarch64`。
 
 ### 安装失败
 
